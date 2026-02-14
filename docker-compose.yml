@@ -1,0 +1,26 @@
+services:
+
+  proxy:
+    image: jc21/nginx-proxy-manager:latest
+    container_name: proxy
+    restart: unless-stopped
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    environment:
+      INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL-admin@example.com}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD-changeme}
+      PUID: ${UID-1000}
+      PGID: ${GID-1000}
+      TZ: ${TZ-America/Toronto}
+    ports:
+      - 80:80
+      - 81:81
+      - 443:443
+    volumes:
+      - ${DOCKER_DATA-./data}/nginx:/data
+      - ${DOCKER_DATA-./data}/letsencrypt:/etc/letsencrypt
+
+networks:
+  default:
+    name: proxy
+    external: true
