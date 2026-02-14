@@ -17,8 +17,8 @@ services:
       - 81:81
       - 443:443
     volumes:
-      - ${DOCKER_DATA-./data}/nginx:/data
-      - ${DOCKER_DATA-./data}/letsencrypt:/etc/letsencrypt
+      - ${DOCKER_DATA-./data}/proxy/nginx:/data
+      - ${DOCKER_DATA-./data}/proxy/letsencrypt:/etc/letsencrypt
 
 networks:
   default:
