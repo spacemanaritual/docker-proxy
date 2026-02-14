@@ -1,0 +1,77 @@
+name: Deploy to server
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      IMAGE_NAME: proxy
+      BRANCH: ${{ github.ref_name }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate required secrets and variables
+        run: |
+          MISSING_VARS=()
+          
+          # Check secrets
+          [[ -z "${{ secrets.INITIAL_ADMIN_PASSWORD }}" ]] && MISSING_VARS+=("INITIAL_ADMIN_PASSWORD (secret)")
+          [[ -z "${{ secrets.SSH_PRIVATE_KEY }}" ]] && MISSING_VARS+=("SSH_PRIVATE_KEY (secret)")
+          
+          # Check variables
+          [[ -z "${{ vars.DOCKER_DATA }}" ]] && MISSING_VARS+=("DOCKER_DATA (variable)")
+          [[ -z "${{ vars.INITIAL_ADMIN_EMAIL }}" ]] && MISSING_VARS+=("INITIAL_ADMIN_EMAIL (variable)")
+          [[ -z "${{ vars.PROJECT_PATH }}" ]] && MISSING_VARS+=("PROJECT_PATH (variable)")
+          [[ -z "${{ vars.SSH_HOST }}" ]] && MISSING_VARS+=("SSH_HOST (variable)")
+          [[ -z "${{ vars.SSH_USER }}" ]] && MISSING_VARS+=("SSH_USER (variable)")
+          
+          if [ ${#MISSING_VARS[@]} -gt 0 ]; then
+            echo "❌ Error: The following required secrets/variables are missing:"
+            printf '  - %s\n' "${MISSING_VARS[@]}"
+            exit 1
+          fi
+          
+          echo "✅ All required secrets and variables are present"
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Setup known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ vars.SSH_HOST }} >> ~/.ssh/known_hosts
+      
+      - name: Deploy on server
+        run: |
+          ssh ${{ vars.SSH_USER }}@${{ vars.SSH_HOST }} << EOF
+            set -e
+            cd ${{ vars.PROJECT_PATH }}
+
+            echo "Synchronizing repository in ${{ vars.PROJECT_PATH }}"
+            git fetch origin
+            git checkout ${{ env.BRANCH }}
+            git reset --hard origin/${{ env.BRANCH }}
+            git clean -fd
+
+            echo "Updating .env file from variables and secrets"
+            printf '%s\n' \
+              "DOCKER_DATA=${{ vars.DOCKER_DATA }}" \
+              "INITIAL_ADMIN_EMAIL=${{ vars.INITIAL_ADMIN_EMAIL }}" \
+              "INITIAL_ADMIN_PASSWORD=${{ secrets.INITIAL_ADMIN_PASSWORD }}" \
+            > .env
+
+            echo "Restarting Docker"
+            docker compose up -d --remove-orphans
+            docker image prune -f
+          EOF
