@@ -9,7 +9,6 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      IMAGE_NAME: proxy
       BRANCH: ${{ github.ref_name }}
 
     steps:
